@@ -360,7 +360,7 @@ fun HomeScreen(
         item {
             Column(modifier = Modifier.padding(vertical = 8.dp)) {
                 Text(
-                    text = "Fiş Defteri",
+                    text = "Fiş Kayıt & Analiz",
                     fontWeight = FontWeight.Bold,
                     fontSize = 28.sp,
                     color = MaterialTheme.colorScheme.primary
@@ -2620,18 +2620,22 @@ fun PriceTrackingScreen(receipts: List<Receipt>) {
     // Aggregate occurrences
     val allProductOccurrences = remember(receipts) {
         val list = mutableListOf<ProductOccurrence>()
+        val seenOnSameDay = mutableSetOf<String>()
         receipts.forEach { rec ->
             val consolidatedStore = consolidateStoreName(rec.storeName)
-            val seenInThisReceipt = mutableSetOf<String>()
+            val dateStr = formatDate(rec.date)
             rec.items.forEach { item ->
-                val normalizedName = item.name.trim().lowercase(Locale("tr", "TR"))
-                if (normalizedName !in seenInThisReceipt) {
-                    seenInThisReceipt.add(normalizedName)
+                val normalizedName = item.name.trim()
+                    .replace("\\s+".toRegex(), " ")
+                    .lowercase(Locale("tr", "TR"))
+                val dayKey = "${consolidatedStore}|||${normalizedName}|||${dateStr}"
+                if (dayKey !in seenOnSameDay) {
+                    seenOnSameDay.add(dayKey)
                     list.add(
                         ProductOccurrence(
                             date = rec.date,
                             storeName = consolidatedStore,
-                            productName = item.name.trim(),
+                            productName = item.name.trim().replace("\\s+".toRegex(), " "),
                             unitPrice = item.unitPrice,
                             quantity = item.quantity,
                             totalPrice = item.totalPrice

@@ -1,5 +1,5 @@
 {
-  "name": "Fiş Defteri",
+  "name": "Fiş Kayıt & Analiz",
   "description": "Market ve alışveriş fişlerini akıllıca tarayan, harcamaları kategorize eden ve bütçe grafiklerini analiz eden yerel harcama takip uygulaması.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
