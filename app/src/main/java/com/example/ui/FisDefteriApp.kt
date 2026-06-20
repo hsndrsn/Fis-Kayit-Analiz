@@ -81,6 +81,7 @@ fun FisDefteriApp(
 
     var activeTab by remember { mutableStateOf(0) }
     var selectedReceiptForDetail by remember { mutableStateOf<Receipt?>(null) }
+    var editingReceipt by remember { mutableStateOf<Receipt?>(null) }
 
     // Uri helper for Camera taking
     var tempPhotoUri by remember { mutableStateOf<Uri?>(null) }
@@ -148,7 +149,7 @@ fun FisDefteriApp(
 
     Scaffold(
         bottomBar = {
-            if (ocrState is GeminiOcrState.Idle || ocrState is GeminiOcrState.Error) {
+            if (editingReceipt == null && (ocrState is GeminiOcrState.Idle || ocrState is GeminiOcrState.Error)) {
                 NavigationBar(
                     modifier = Modifier.windowInsetsPadding(WindowInsets.navigationBars)
                 ) {
@@ -183,13 +184,26 @@ fun FisDefteriApp(
                 .padding(innerPadding)
         ) {
             // State pattern for app content
-            when (val currentOcr = ocrState) {
-                is GeminiOcrState.Loading -> {
+            val editRec = editingReceipt
+            val currentOcr = ocrState
+            when {
+                editRec != null -> {
+                    EditReceiptScreen(
+                        receipt = editRec,
+                        onCancel = { editingReceipt = null },
+                        onSave = { id, store, date, total, loc, items ->
+                            viewModel.updateReceipt(id, store, date, total, loc, items)
+                            editingReceipt = null
+                            Toast.makeText(context, "Fiş başarıyla güncellendi!", Toast.LENGTH_SHORT).show()
+                        }
+                    )
+                }
+                currentOcr is GeminiOcrState.Loading -> {
                     ScanningProgressOverlay(
                         capturedPhoto = capturedPhotoState
                     )
                 }
-                is GeminiOcrState.Success -> {
+                currentOcr is GeminiOcrState.Success -> {
                     PreviewOcrScreen(
                         parsedData = currentOcr.parsedReceipt,
                         capturedPhoto = capturedPhotoState,
@@ -216,7 +230,7 @@ fun FisDefteriApp(
                                 onCameraClick = { startCameraIntent() },
                                 onGalleryClick = { galleryLauncher.launch("image/*") },
                                 onReceiptClick = { selectedReceiptForDetail = it },
-                                ocrState = currentOcr,
+                                ocrState = ocrState,
                                 onDismissError = { viewModel.resetOcrState() }
                             )
                             1 -> HistoryScreen(
@@ -240,6 +254,10 @@ fun FisDefteriApp(
                         viewModel.deleteReceipt(receipt.id)
                         selectedReceiptForDetail = null
                         Toast.makeText(context, "Fiş silindi.", Toast.LENGTH_SHORT).show()
+                    },
+                    onEdit = {
+                        editingReceipt = receipt
+                        selectedReceiptForDetail = null
                     }
                 )
             }
@@ -555,7 +573,7 @@ fun EmptyReceiptState() {
 }
 
 @Composable
-fun ReceiptRowItem(receipt: Receipt, onClick: () -> Unit) {
+fun ReceiptRowItem(receipt: Receipt, searchQuery: String = "", onClick: () -> Unit) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -566,50 +584,108 @@ fun ReceiptRowItem(receipt: Receipt, onClick: () -> Unit) {
         ),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
-        Row(
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
+                .padding(16.dp)
         ) {
-            Column(modifier = Modifier.weight(1.0f)) {
-                Text(
-                    text = receipt.storeName,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 16.sp,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Column(modifier = Modifier.weight(1.0f)) {
                     Text(
-                        text = formatDate(receipt.date),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        text = receipt.storeName,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 16.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
-                    if (!receipt.location.isNullOrBlank()) {
-                        Spacer(modifier = Modifier.width(8.dp))
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
-                            text = "• ${receipt.location}",
+                            text = formatDate(receipt.date),
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
+                        if (!receipt.location.isNullOrBlank()) {
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "• ${receipt.location}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.width(12.dp))
+
+                Text(
+                    text = "₺${formatMoney(receipt.totalAmount)}",
+                    fontWeight = FontWeight.ExtraBold,
+                    fontSize = 18.sp,
+                    color = MaterialTheme.colorScheme.primary,
+                    style = MaterialTheme.typography.titleMedium
+                )
+            }
+
+            // Inline matching search items
+            if (searchQuery.isNotBlank()) {
+                val matchingItems = receipt.items.filter { it.name.contains(searchQuery, ignoreCase = true) }
+                if (matchingItems.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "Eşleşen Ürünler:",
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.padding(bottom = 4.dp)
+                    )
+                    matchingItems.forEach { item ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 2.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(
+                                modifier = Modifier.weight(1f),
+                                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "• ${item.name}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    fontWeight = FontWeight.Medium,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                if (item.quantity > 1.0) {
+                                    Text(
+                                        text = "(${formatDouble(item.quantity)} adet)",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                            Text(
+                                text = "₺${formatMoney(item.totalPrice)}",
+                                style = MaterialTheme.typography.bodySmall,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                        }
                     }
                 }
             }
-
-            Spacer(modifier = Modifier.width(12.dp))
-
-            Text(
-                text = "₺${formatMoney(receipt.totalAmount)}",
-                fontWeight = FontWeight.ExtraBold,
-                fontSize = 18.sp,
-                color = MaterialTheme.colorScheme.primary,
-                style = MaterialTheme.typography.titleMedium
-            )
         }
     }
 }
@@ -634,7 +710,8 @@ fun HistoryScreen(
     val filteredReceipts = remember(receipts, searchQuery, selectedCategoryFilter, selectedStoreFilter) {
         receipts.filter { rec ->
             val matchesSearch = rec.storeName.contains(searchQuery, ignoreCase = true) || 
-                                (rec.location ?: "").contains(searchQuery, ignoreCase = true)
+                                (rec.location ?: "").contains(searchQuery, ignoreCase = true) ||
+                                rec.items.any { it.name.contains(searchQuery, ignoreCase = true) }
 
             val matchesStore = selectedStoreFilter == "Tümü" || rec.storeName.trim() == selectedStoreFilter
 
@@ -661,7 +738,7 @@ fun HistoryScreen(
         OutlinedTextField(
             value = searchQuery,
             onValueChange = { searchQuery = it },
-            label = { Text("Mağaza veya konuma göre ara...") },
+            label = { Text("Mağaza, konum veya ürün adına göre ara...") },
             leadingIcon = { Icon(Icons.Default.Search, contentDescription = "Ara") },
             modifier = Modifier
                 .fillMaxWidth()
@@ -745,7 +822,7 @@ fun HistoryScreen(
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 itemsIndexed(filteredReceipts) { _, receipt ->
-                    ReceiptRowItem(receipt = receipt, onClick = { onReceiptClick(receipt) })
+                    ReceiptRowItem(receipt = receipt, searchQuery = searchQuery, onClick = { onReceiptClick(receipt) })
                 }
             }
         }
@@ -1113,13 +1190,341 @@ fun PreviewOcrScreen(
     }
 }
 
+// Edit Screen for existing Receipt
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+fun EditReceiptScreen(
+    receipt: Receipt,
+    onCancel: () -> Unit,
+    onSave: (Long, String, String, Double, String, List<ReceiptItem>) -> Unit
+) {
+    var storeName by remember { mutableStateOf(receipt.storeName) }
+    var rawDate by remember { mutableStateOf(formatDate(receipt.date)) }
+    var totalAmountInput by remember { mutableStateOf(receipt.totalAmount.toString()) }
+    var locationInput by remember { mutableStateOf(receipt.location ?: "") }
+
+    // Make an editable list of items
+    val itemsList = remember {
+        val initialList = receipt.items.map {
+            mutableStateOf(
+                ReceiptItem(
+                    name = it.name,
+                    quantity = it.quantity,
+                    unitPrice = it.unitPrice,
+                    totalPrice = it.totalPrice,
+                    category = if (CUSTOM_CATEGORIES.contains(it.category)) it.category else "Diğer"
+                )
+            )
+        }.toMutableStateList()
+        initialList
+    }
+
+    // Auto calculate and update total amount based on items sum
+    val computedTotal = remember(itemsList) {
+        derivedStateOf {
+            itemsList.sumOf { it.value.totalPrice }
+        }
+    }
+
+    LaunchedEffect(computedTotal.value) {
+        if (computedTotal.value > 0.0) {
+            totalAmountInput = String.format(Locale.US, "%.2f", computedTotal.value)
+        }
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+    ) {
+        Text(
+            text = "Fiş Düzenle",
+            fontWeight = FontWeight.Bold,
+            style = MaterialTheme.typography.headlineSmall,
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.padding(16.dp)
+        )
+
+        LazyColumn(
+            modifier = Modifier
+                .weight(1f)
+                .padding(horizontal = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            // Store & Date row
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surface
+                    ),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Text(
+                            text = "Genel Bilgiler",
+                            fontWeight = FontWeight.Bold,
+                            style = MaterialTheme.typography.titleMedium
+                        )
+
+                        OutlinedTextField(
+                            value = storeName,
+                            onValueChange = { storeName = it },
+                            label = { Text("Mağaza Adı") },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true
+                        )
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            OutlinedTextField(
+                                value = rawDate,
+                                onValueChange = { rawDate = it },
+                                label = { Text("Tarih (gg.aa.yyyy)") },
+                                modifier = Modifier.weight(1f),
+                                singleLine = true
+                            )
+                            OutlinedTextField(
+                                value = totalAmountInput,
+                                onValueChange = { totalAmountInput = it },
+                                label = { Text("Toplam Tutar (₺)") },
+                                modifier = Modifier.weight(1f),
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                                singleLine = true
+                            )
+                        }
+
+                        OutlinedTextField(
+                            value = locationInput,
+                            onValueChange = { locationInput = it },
+                            label = { Text("Şube / Konum Bilgisi") },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true
+                        )
+                    }
+                }
+            }
+
+            // Products section
+            item {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Satın Alınan Ürünler (${itemsList.size})",
+                        fontWeight = FontWeight.Bold,
+                        style = MaterialTheme.typography.titleMedium
+                    )
+
+                    TextButton(
+                        onClick = {
+                            itemsList.add(
+                                mutableStateOf(
+                                    ReceiptItem(
+                                        name = "Yeni Ürün",
+                                        quantity = 1.0,
+                                        unitPrice = 0.0,
+                                        totalPrice = 0.0,
+                                        category = "Diğer"
+                                    )
+                                )
+                            )
+                        }
+                    ) {
+                        Icon(Icons.Default.Add, contentDescription = "Ekle")
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Yeni Ürün Ekle")
+                    }
+                }
+            }
+
+            itemsIndexed(itemsList) { index, itemState ->
+                val item = itemState.value
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+                    ),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "${index + 1}. Ürün Detayı",
+                                style = MaterialTheme.typography.bodySmall,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+
+                            IconButton(
+                                onClick = { itemsList.removeAt(index) },
+                                modifier = Modifier.size(24.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Delete,
+                                    contentDescription = "Ürünü Sil",
+                                    tint = MaterialTheme.colorScheme.error,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                        }
+
+                        // Product Name field
+                        OutlinedTextField(
+                            value = item.name,
+                            onValueChange = { nameStr ->
+                                itemState.value = item.copy(name = nameStr)
+                            },
+                            label = { Text("Ürün Adı") },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true
+                        )
+
+                        // Category flow layout selection
+                        Text(text = "Kategori", style = MaterialTheme.typography.labelSmall)
+                        FlowRow(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            CUSTOM_CATEGORIES.forEach { cat ->
+                                val isSelected = item.category == cat
+                                FilterChip(
+                                    selected = isSelected,
+                                    onClick = {
+                                        itemState.value = item.copy(category = cat)
+                                    },
+                                    label = { Text(cat, fontSize = 11.sp) }
+                                )
+                            }
+                        }
+
+                        // Pricing calculation inputs
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            OutlinedTextField(
+                                value = formatDouble(item.quantity),
+                                onValueChange = { qtyStr ->
+                                    val qty = qtyStr.toDoubleOrNull() ?: 1.0
+                                    val newTotal = qty * item.unitPrice
+                                    itemState.value = item.copy(
+                                        quantity = qty,
+                                        totalPrice = newTotal
+                                    )
+                                },
+                                label = { Text("Adet") },
+                                modifier = Modifier.weight(1f),
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                                singleLine = true
+                            )
+
+                            OutlinedTextField(
+                                value = formatDouble(item.unitPrice),
+                                onValueChange = { prcStr ->
+                                    val prc = prcStr.toDoubleOrNull() ?: 0.0
+                                    val newTotal = item.quantity * prc
+                                    itemState.value = item.copy(
+                                        unitPrice = prc,
+                                        totalPrice = newTotal
+                                    )
+                                },
+                                label = { Text("Birim F. (₺)") },
+                                modifier = Modifier.weight(1.2f),
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                                singleLine = true
+                            )
+
+                            OutlinedTextField(
+                                value = String.format(Locale.US, "%.2f", item.totalPrice),
+                                onValueChange = { totStr ->
+                                    val tot = totStr.toDoubleOrNull() ?: 0.0
+                                    itemState.value = item.copy(totalPrice = tot)
+                                },
+                                label = { Text("Toplam (₺)") },
+                                modifier = Modifier.weight(1.8f),
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                                singleLine = true
+                            )
+                        }
+                    }
+                }
+            }
+
+            item {
+                Spacer(modifier = Modifier.height(24.dp))
+            }
+        }
+
+        // Save panel at the bottom
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surface
+            ),
+            elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                OutlinedButton(
+                    onClick = onCancel,
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(50.dp),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Text("İptal Et")
+                }
+
+                Button(
+                    onClick = {
+                        val parsedTotal = totalAmountInput.toDoubleOrNull() ?: computedTotal.value
+                        val itemsToSave = itemsList.map { it.value }
+                        onSave(receipt.id, storeName, rawDate, parsedTotal, locationInput, itemsToSave)
+                    },
+                    modifier = Modifier
+                        .weight(1.5f)
+                        .height(50.dp),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Icon(Icons.Default.Check, contentDescription = "Kaydet")
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Değişiklikleri Kaydet")
+                }
+            }
+        }
+    }
+}
+
 // Receipt Detail Bottom Sheet Dialog
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ReceiptDetailBottomSheet(
     receipt: Receipt,
     onDismiss: () -> Unit,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
+    onEdit: () -> Unit
 ) {
     ModalBottomSheet(
         onDismissRequest = onDismiss
@@ -1152,13 +1557,27 @@ fun ReceiptDetailBottomSheet(
 
                 Spacer(modifier = Modifier.width(12.dp))
 
-                IconButton(
-                    onClick = onDelete,
-                    colors = IconButtonDefaults.iconButtonColors(
-                        contentColor = MaterialTheme.colorScheme.error
-                    )
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Icon(Icons.Default.Delete, contentDescription = "Sil")
+                    IconButton(
+                        onClick = onEdit,
+                        colors = IconButtonDefaults.iconButtonColors(
+                            contentColor = MaterialTheme.colorScheme.primary
+                        )
+                    ) {
+                        Icon(Icons.Default.Edit, contentDescription = "Düzenle")
+                    }
+
+                    IconButton(
+                        onClick = onDelete,
+                        colors = IconButtonDefaults.iconButtonColors(
+                            contentColor = MaterialTheme.colorScheme.error
+                        )
+                    ) {
+                        Icon(Icons.Default.Delete, contentDescription = "Sil")
+                    }
                 }
             }
 
@@ -1320,7 +1739,7 @@ fun AnalyticsScreen(
     }
 
     val storeTotals = remember(receipts) {
-        receipts.groupBy { it.storeName.trim() }
+        receipts.groupBy { consolidateStoreName(it.storeName) }
             .mapValues { entry -> entry.value.sumOf { it.totalAmount } }
             .toList()
             .sortedByDescending { it.second }
@@ -1472,6 +1891,11 @@ fun AnalyticsScreen(
             }
         }
 
+        // Time-based Spend card
+        item {
+            TimeBasedAnalysisCard(receipts = receipts)
+        }
+
         // Store spending Distribution Horizontal Bar Chart
         if (storeTotals.isNotEmpty()) {
             item {
@@ -1539,6 +1963,134 @@ fun AnalyticsScreen(
         }
     }
 }
+
+@Composable
+fun TimeBasedAnalysisCard(receipts: List<Receipt>) {
+    var selectedGroup by remember { mutableStateOf(TimeGrouping.AYLIK) }
+
+    val groupedSpendings = remember(receipts, selectedGroup) {
+        val cal = Calendar.getInstance()
+        val groups = mutableMapOf<String, Double>()
+        val groupTimestamps = mutableMapOf<String, Long>()
+
+        receipts.forEach { rec ->
+            cal.timeInMillis = rec.date
+            val key = when (selectedGroup) {
+                TimeGrouping.GÜNLÜK -> formatDate(rec.date)
+                TimeGrouping.HAFTALIK -> {
+                    val week = cal.get(Calendar.WEEK_OF_YEAR)
+                    val year = cal.get(Calendar.YEAR)
+                    "Hafta $week ($year)"
+                }
+                TimeGrouping.AYLIK -> {
+                    val monthName = cal.getDisplayName(Calendar.MONTH, Calendar.LONG, Locale("tr", "TR")) ?: ""
+                    val year = cal.get(Calendar.YEAR)
+                    "$monthName $year"
+                }
+            }
+            groups[key] = (groups[key] ?: 0.0) + rec.totalAmount
+            val currentMax = groupTimestamps[key] ?: 0L
+            if (rec.date > currentMax) {
+                groupTimestamps[key] = rec.date
+            }
+        }
+
+        groups.toList()
+            .sortedByDescending { (key, _) -> groupTimestamps[key] ?: 0L }
+    }
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Text(
+                text = "Zamana Göre Harcamalar",
+                fontWeight = FontWeight.Bold,
+                style = MaterialTheme.typography.titleMedium
+            )
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                TimeGrouping.values().forEach { grouping ->
+                    val isSelected = selectedGroup == grouping
+                    val label = when (grouping) {
+                        TimeGrouping.GÜNLÜK -> "Günlük"
+                        TimeGrouping.HAFTALIK -> "Haftalık"
+                        TimeGrouping.AYLIK -> "Aylık"
+                    }
+                    FilterChip(
+                        selected = isSelected,
+                        onClick = { selectedGroup = grouping },
+                        label = { Text(label, fontSize = 12.sp) }
+                    )
+                }
+            }
+
+            if (groupedSpendings.isEmpty()) {
+                Text(
+                    "Bu periyotta harcama verisi bulunamadı.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            } else {
+                val maxAmount = groupedSpendings.maxOf { it.second }.toFloat()
+
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    groupedSpendings.take(5).forEach { (periodName, totalAmount) ->
+                        val barPercentage = if (maxAmount > 0f) (totalAmount / maxAmount).toFloat() else 0f
+                        Column(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text(
+                                    text = periodName,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 13.sp
+                                )
+                                Text(
+                                    text = "₺${formatMoney(totalAmount)}",
+                                    fontWeight = FontWeight.SemiBold,
+                                    fontSize = 13.sp,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            }
+
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(10.dp)
+                                    .clip(CircleShape)
+                                    .background(MaterialTheme.colorScheme.surfaceVariant)
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth(barPercentage)
+                                        .height(10.dp)
+                                        .clip(CircleShape)
+                                        .background(MaterialTheme.colorScheme.primary)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+enum class TimeGrouping { GÜNLÜK, HAFTALIK, AYLIK }
 
 // Custom concentric Ring/Donut Graph on Canvas
 @Composable
@@ -1616,6 +2168,32 @@ fun formatDouble(value: Double): String {
         value.toInt().toString()
     } else {
         String.format(Locale.US, "%.2f", value)
+    }
+}
+
+fun consolidateStoreName(name: String): String {
+    val trimmed = name.trim()
+    val lower = trimmed.lowercase(Locale("tr", "TR"))
+    return when {
+        lower.contains("file") -> "File Market"
+        lower.contains("migros") -> "Migros"
+        lower.contains("bim") || lower == "bi̇m" -> "BİM"
+        lower.contains("a101") || lower.contains("a-101") -> "A101"
+        lower.contains("şok") || lower.contains("sok") || lower == "sok market" || lower == "şok market" -> "ŞOK Market"
+        lower.contains("carrefour") -> "CarrefourSA"
+        lower.contains("shell") -> "Shell"
+        lower.contains("opet") -> "Opet"
+        lower.contains("gratis") -> "Gratis"
+        lower.contains("watsons") -> "Watsons"
+        lower.contains("tarım kredi") || lower.contains("kooperatif") -> "Tarım Kredi Koop."
+        lower.contains("macrocenter") || lower.contains("macro") -> "Macrocenter"
+        else -> {
+            // Capitalize first letters of each word
+            trimmed.split(" ").filter { it.isNotBlank() }
+                .joinToString(" ") { word ->
+                    word.replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale("tr", "TR")) else it.toString() }
+                }
+        }
     }
 }
 

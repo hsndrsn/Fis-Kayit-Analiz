@@ -78,6 +78,28 @@ class ReceiptViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
+    fun updateReceipt(
+        id: Long,
+        storeName: String,
+        dateStr: String,
+        totalAmount: Double,
+        location: String,
+        items: List<ReceiptItem>
+    ) {
+        viewModelScope.launch {
+            val timestamp = parseTurkishDate(dateStr)
+            val receipt = Receipt(
+                id = id,
+                storeName = storeName.ifBlank { "Bilinmeyen Mağaza" },
+                date = timestamp,
+                totalAmount = totalAmount,
+                location = location,
+                items = items
+            )
+            repository.update(receipt)
+        }
+    }
+
     fun analyzeReceipt(bitmap: Bitmap) {
         setCapturedPhoto(bitmap)
         _ocrState.value = GeminiOcrState.Loading
@@ -104,7 +126,8 @@ class ReceiptViewModel(application: Application) : AndroidViewModel(application)
                     3. Alışveriş tarihi dd.MM.yyyy (ör. 19.06.2026) şeklinde olsun. Eğer yıl taranamadıysa 2026 olarak varsay.
                     4. Görüntüdeki silik, küçük veya kaymış yazılarda karakterleri doğru tahmin etmek için bağlamdan yararlan. Sıklıkla hata yapılan şu karakter çiftlerine özellikle dikkat et: '9' ile '8', '5' ile '6', 'F' ile 'R', 'O' ile '0' (Sıfır), '1' ile '7'.
                     5. Sayısal Tutarlılık ve Sağlama Kuralı: Taranan fiyatları matematiksel olarak doğrula. Her kalem için "Miktar (quantity) * Birim Fiyat (unitPrice) = Toplam Fiyat (totalPrice)" denklemlerini kontrol et. Eğer görseldeki rakamlar siliklik nedeniyle uyuşmuyorsa, en mantıklı rakam tashihi ile matematiksel uyuşumu sağla. Ayrıca tüm kalemlerin "totalPrice" toplamının, ana "totalAmount" (Genel Toplam) değerini teyit ettiğinden emin ol.
-                    6. Çıktı biçimi tam olarak şu JSON şemasında olmalıdır:
+                    6. Türkçe Karakterleri Koruma Kuralı: Fiş üzerindeki ürün isimlerinde ve mağaza isimlerinde yer alan Türkçe karakterleri (Ş, ş, Ç, ç, Ğ, ğ, Ü, ü, Ö, ö, İ, ı, vb.) kesinlikle İngilizce karakterlere dönüştürme. Görselde nasıl yazıyorsa harfi harfine, orijinal Türkçe karakterleriyle birlikte olduğu gibi aktar (örneğin "İ" harfini "I" yapma, olduğu gibi "İ" olarak bırak).
+                    7. Çıktı biçimi tam olarak şu JSON şemasında olmalıdır:
                     {
                       "storeName": "Mağaza veya İşyeri Adı",
                       "date": "gg.aa.yyyy",
