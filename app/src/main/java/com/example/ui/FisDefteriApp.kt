@@ -174,6 +174,13 @@ fun FisDefteriApp(
                         label = { Text("Analiz") },
                         modifier = Modifier.testTag("nav_analysis")
                     )
+                    NavigationBarItem(
+                        selected = activeTab == 3,
+                        onClick = { activeTab = 3 },
+                        icon = { Icon(Icons.Default.Star, contentDescription = "Fiyat Değişim") },
+                        label = { Text("Fiyat Değişim") },
+                        modifier = Modifier.testTag("nav_price_change")
+                    )
                 }
             }
         }
@@ -238,6 +245,9 @@ fun FisDefteriApp(
                                 onReceiptClick = { selectedReceiptForDetail = it }
                             )
                             2 -> AnalyticsScreen(
+                                receipts = receipts
+                            )
+                            3 -> PriceTrackingScreen(
                                 receipts = receipts
                             )
                         }
@@ -1753,6 +1763,23 @@ fun AnalyticsScreen(
         categoryTotals.firstOrNull()?.first ?: "Yok"
     }
 
+    var selectedDrillDownCategory by remember { mutableStateOf<String?>(if (topCategory != "Yok") topCategory else null) }
+
+    val drilldownItems = remember(receipts, selectedDrillDownCategory) {
+        if (selectedDrillDownCategory == null) emptyList()
+        else {
+            val list = mutableListOf<Triple<Receipt, ReceiptItem, String>>()
+            receipts.forEach { rec ->
+                rec.items.forEach { item ->
+                    if (item.category == selectedDrillDownCategory) {
+                        list.add(Triple(rec, item, consolidateStoreName(rec.storeName)))
+                    }
+                }
+            }
+            list.sortedByDescending { it.first.date }
+        }
+    }
+
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
@@ -1772,6 +1799,199 @@ fun AnalyticsScreen(
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
+        }
+
+        // 2x2 Grid of Dashboard Summary Metrics
+        item {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    // Top spent card
+                    Card(
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
+                        ),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.1f))
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .clip(CircleShape)
+                                    .background(MaterialTheme.colorScheme.primary),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.ShoppingCart,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onPrimary,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                            Column {
+                                Text(
+                                    "Toplam Harcama",
+                                    fontSize = 11.sp,
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+                                )
+                                Text(
+                                    "₺${formatMoney(totalSpendSum)}",
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 14.sp,
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                                )
+                            }
+                        }
+                    }
+
+                    // Total receipts card
+                    Card(
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f)
+                        ),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.secondary.copy(alpha = 0.1f))
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .clip(CircleShape)
+                                    .background(MaterialTheme.colorScheme.secondary),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.List,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onSecondary,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                            Column {
+                                Text(
+                                    "Fiş Adedi",
+                                    fontSize = 11.sp,
+                                    color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f)
+                                )
+                                Text(
+                                    "${receipts.size} Fiş",
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 14.sp,
+                                    color = MaterialTheme.colorScheme.onSecondaryContainer
+                                )
+                            }
+                        }
+                    }
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    // Average Spent card
+                    Card(
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.5f)
+                        ),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.tertiary.copy(alpha = 0.1f))
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .clip(CircleShape)
+                                    .background(MaterialTheme.colorScheme.tertiary),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Star,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onTertiary,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                            Column {
+                                Text(
+                                    "Ortalama Fiş",
+                                    fontSize = 11.sp,
+                                    color = MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.7f)
+                                )
+                                Text(
+                                    "₺${formatMoney(totalSpendSum / receipts.size)}",
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 14.sp,
+                                    color = MaterialTheme.colorScheme.onTertiaryContainer
+                                )
+                            }
+                        }
+                    }
+
+                    // Top store/most expensive
+                    Card(
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant
+                        ),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .clip(CircleShape)
+                                    .background(MaterialTheme.colorScheme.outline),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Info,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onPrimary,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                            Column {
+                                Text(
+                                    "En Pahalı Harcama",
+                                    fontSize = 11.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Text(
+                                    "₺${formatMoney(highestReceipt?.totalAmount ?: 0.0)}",
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 14.sp,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                        }
+                    }
+                }
+            }
         }
 
         // Automatic Insight Cards
@@ -1794,10 +2014,6 @@ fun AnalyticsScreen(
                     )
 
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
-                            Text("Ömür Boyu Toplam:", style = MaterialTheme.typography.bodyMedium)
-                            Text("₺${formatMoney(totalSpendSum)}", fontWeight = FontWeight.Bold)
-                        }
                         Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
                             Text("En Fazla Harcanan Kategori:", style = MaterialTheme.typography.bodyMedium)
                             Text(topCategory, fontWeight = FontWeight.Bold, color = CATEGORY_COLORS[topCategory] ?: MaterialTheme.colorScheme.primary)
@@ -1831,19 +2047,26 @@ fun AnalyticsScreen(
             }
         }
 
-        // Category Distribution Donut Chart
+        // Interactive Category Distribution Donut / Pie Chart
         if (categoryTotals.isNotEmpty()) {
             item {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
                         Text(
-                            text = "Kategorilere Göre Dağılım",
+                            text = "Kategorilere Göre Dağılım (Pasta Grafik)",
                             fontWeight = FontWeight.Bold,
                             style = MaterialTheme.typography.titleMedium,
+                            modifier = Modifier.padding(bottom = 4.dp)
+                        )
+                        Text(
+                            text = "Detayları ve ürünleri görmek için bir kategoriye dokunun",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.padding(bottom = 16.dp)
                         )
 
@@ -1853,20 +2076,46 @@ fun AnalyticsScreen(
                             horizontalArrangement = Arrangement.spacedBy(16.dp)
                         ) {
                             // Donut Chart Canvas
-                            CategoryDonutChart(
-                                categoryTotals = categoryTotals,
-                                totalWidth = totalSpendSum
-                            )
+                            Box(
+                                contentAlignment = Alignment.Center
+                            ) {
+                                CategoryDonutChart(
+                                    categoryTotals = categoryTotals,
+                                    totalWidth = totalSpendSum
+                                )
+                                // Centered category info
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    val countOfCats = categoryTotals.size
+                                    Text(
+                                        text = "$countOfCats Kat.",
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
 
-                            // Legend list
+                            // Interactive Legend List
                             Column(
                                 modifier = Modifier.weight(1f),
-                                verticalArrangement = Arrangement.spacedBy(6.dp)
+                                verticalArrangement = Arrangement.spacedBy(4.dp)
                             ) {
-                                categoryTotals.take(4).forEach { (cat, amount) ->
+                                categoryTotals.forEach { (cat, amount) ->
                                     val percent = if (totalSpendSum > 0) ((amount / totalSpendSum) * 100).toInt() else 0
+                                    val isSelected = selectedDrillDownCategory == cat
                                     Row(
-                                        verticalAlignment = Alignment.CenterVertically
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .background(
+                                                if (isSelected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f)
+                                                else Color.Transparent
+                                            )
+                                            .clickable {
+                                                selectedDrillDownCategory = if (isSelected) null else cat
+                                            }
+                                            .padding(horizontal = 6.dp, vertical = 4.dp)
                                     ) {
                                         Box(
                                             modifier = Modifier
@@ -1878,9 +2127,135 @@ fun AnalyticsScreen(
                                         Text(
                                             text = "$cat (%$percent)",
                                             fontSize = 12.sp,
-                                            fontWeight = FontWeight.Medium,
+                                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                            color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                            modifier = Modifier.weight(1f)
+                                        )
+                                        if (isSelected) {
+                                            Icon(
+                                                imageVector = Icons.Default.Check,
+                                                contentDescription = "Seçili",
+                                                tint = MaterialTheme.colorScheme.primary,
+                                                modifier = Modifier.size(12.dp)
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Drill-Down detailed summary section
+        val activeDrill = selectedDrillDownCategory
+        if (activeDrill != null && drilldownItems.isNotEmpty()) {
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.15f))
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(12.dp)
+                                        .clip(CircleShape)
+                                        .background(CATEGORY_COLORS[activeDrill] ?: Color.Gray)
+                                )
+                                Text(
+                                    text = "$activeDrill Veri Özeti",
+                                    fontWeight = FontWeight.Bold,
+                                    style = MaterialTheme.typography.titleMedium,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                            }
+                            IconButton(
+                                onClick = { selectedDrillDownCategory = null },
+                                modifier = Modifier.size(24.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Delete,
+                                    contentDescription = "Kapat",
+                                    modifier = Modifier.size(16.dp),
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+
+                        val catTotalStrStr = categoryTotals.find { it.first == activeDrill }?.second ?: 0.0
+                        Text(
+                            text = "Bu kategoride toplam harcanan miktar: ₺${formatMoney(catTotalStrStr)}",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            drilldownItems.forEach { (receipt, item, store) ->
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 4.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.Top
+                                ) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = item.name,
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 13.sp,
+                                            color = MaterialTheme.colorScheme.onSurface,
                                             maxLines = 1,
                                             overflow = TextOverflow.Ellipsis
+                                        )
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                        ) {
+                                            Text(
+                                                text = store,
+                                                fontSize = 11.sp,
+                                                fontWeight = FontWeight.Medium,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                            Text(
+                                                text = "• ${formatDate(receipt.date)}",
+                                                fontSize = 11.sp,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+                                    }
+
+                                    Column(horizontalAlignment = Alignment.End) {
+                                        Text(
+                                            text = "₺${formatMoney(item.totalPrice)}",
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 13.sp,
+                                            color = MaterialTheme.colorScheme.primary
+                                        )
+                                        Text(
+                                            text = "${formatDouble(item.quantity)} Adet x ₺${formatMoney(item.unitPrice)}",
+                                            fontSize = 10.sp,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
                                     }
                                 }
@@ -2212,3 +2587,528 @@ fun getSmartTurkishRecommendation(topCategory: String, averageTicket: Double): S
 
 @Composable
 fun MaterialTheme.errorColor(): Color = MaterialTheme.colorScheme.error
+
+data class ProductOccurrence(
+    val date: Long,
+    val storeName: String,
+    val productName: String,
+    val unitPrice: Double,
+    val quantity: Double,
+    val totalPrice: Double
+)
+
+data class PriceHistoryPoint(
+    val occurrence: ProductOccurrence,
+    val diffAmount: Double,
+    val diffPercentage: Double,
+    val isFirst: Boolean
+)
+
+data class ProductHistory(
+    val storeName: String,
+    val productName: String,
+    val history: List<PriceHistoryPoint>
+)
+
+@OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
+@Composable
+fun PriceTrackingScreen(receipts: List<Receipt>) {
+    var searchQuery by remember { mutableStateOf("") }
+    var selectedStoreFilter by remember { mutableStateOf("Tümü") }
+    var onlyChangesFilter by remember { mutableStateOf(true) }
+
+    // Aggregate occurrences
+    val allProductOccurrences = remember(receipts) {
+        val list = mutableListOf<ProductOccurrence>()
+        receipts.forEach { rec ->
+            val consolidatedStore = consolidateStoreName(rec.storeName)
+            val seenInThisReceipt = mutableSetOf<String>()
+            rec.items.forEach { item ->
+                val normalizedName = item.name.trim().lowercase(Locale("tr", "TR"))
+                if (normalizedName !in seenInThisReceipt) {
+                    seenInThisReceipt.add(normalizedName)
+                    list.add(
+                        ProductOccurrence(
+                            date = rec.date,
+                            storeName = consolidatedStore,
+                            productName = item.name.trim(),
+                            unitPrice = item.unitPrice,
+                            quantity = item.quantity,
+                            totalPrice = item.totalPrice
+                        )
+                    )
+                }
+            }
+        }
+        list
+    }
+
+    // Consolidated stores to filter with
+    val availableStores = remember(allProductOccurrences) {
+        listOf("Tümü") + allProductOccurrences.map { it.storeName }.distinct().sorted()
+    }
+
+    // Grouping by store and normalized product name
+    val groupedProducts = remember(allProductOccurrences, searchQuery, selectedStoreFilter, onlyChangesFilter) {
+        // Group by Store -> Product Name (normalized)
+        val filtered = allProductOccurrences.filter { occ ->
+            val matchesStore = selectedStoreFilter == "Tümü" || occ.storeName == selectedStoreFilter
+            val matchesSearch = occ.productName.contains(searchQuery, ignoreCase = true)
+            matchesStore && matchesSearch
+        }
+
+        val groups = filtered.groupBy { "${it.storeName}|||${it.productName.lowercase(Locale("tr", "TR"))}" }
+        
+        val productHistoryList = groups.map { (key, occurrences) ->
+            val parts = key.split("|||")
+            val store = parts[0]
+            // Use the most frequent or first occurrence name as display name
+            val displayName = occurrences.first().productName
+
+            // Sort chronologically by date
+            val sortedOccurrences = occurrences.sortedBy { it.date }
+            
+            // Calculate sequential changes
+            val historyWithChanges = mutableListOf<PriceHistoryPoint>()
+            for (i in sortedOccurrences.indices) {
+                val current = sortedOccurrences[i]
+                if (i == 0) {
+                    historyWithChanges.add(
+                        PriceHistoryPoint(
+                            occurrence = current,
+                            diffAmount = 0.0,
+                            diffPercentage = 0.0,
+                            isFirst = true
+                        )
+                    )
+                } else {
+                    val prev = sortedOccurrences[i - 1]
+                    val diff = current.unitPrice - prev.unitPrice
+                    val percent = if (prev.unitPrice > 0.0) {
+                        (diff / prev.unitPrice) * 100.0
+                    } else {
+                        0.0
+                    }
+                    historyWithChanges.add(
+                        PriceHistoryPoint(
+                            occurrence = current,
+                            diffAmount = diff,
+                            diffPercentage = percent,
+                            isFirst = false
+                        )
+                    )
+                }
+            }
+
+            ProductHistory(
+                storeName = store,
+                productName = displayName,
+                history = historyWithChanges
+            )
+        }
+
+        // Apply "only changes" filter
+        val result = if (onlyChangesFilter) {
+            productHistoryList.filter { it.history.size >= 2 }
+        } else {
+            productHistoryList
+        }
+
+        // Sort by the ones with the largest history count or highest percent change
+        result.sortedWith(compareByDescending<ProductHistory> { it.history.size }.thenBy { it.productName })
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+    ) {
+        // Top view with static banner background look
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Text(
+                text = "Fiyat Değişim Takibi",
+                fontWeight = FontWeight.Bold,
+                style = MaterialTheme.typography.headlineMedium,
+                color = MaterialTheme.colorScheme.primary
+            )
+            Text(
+                text = "Aynı mağazadan farklı tarihlerde aldığınız ürünlerin birim fiyatlarındaki değişimlerini tutar ve oransal olarak görüntüleyin.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
+            // Search Bar
+            OutlinedTextField(
+                value = searchQuery,
+                onValueChange = { searchQuery = it },
+                label = { Text("Ürün adı ile geçmişi sorgula...") },
+                leadingIcon = { Icon(Icons.Default.Search, contentDescription = "Ara") },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true
+            )
+
+            // Filtering options row
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                FilterChip(
+                    selected = onlyChangesFilter,
+                    onClick = { onlyChangesFilter = !onlyChangesFilter },
+                    label = { Text("Sadece Fiyatı Değişenler") },
+                    leadingIcon = {
+                        if (onlyChangesFilter) {
+                            Icon(
+                                imageVector = Icons.Default.Check,
+                                contentDescription = null,
+                                modifier = Modifier.size(14.dp)
+                            )
+                        }
+                    }
+                )
+            }
+
+            // Store list horizontal chip filter
+            if (availableStores.size > 1) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    availableStores.forEach { store ->
+                        val isSelected = selectedStoreFilter == store
+                        FilterChip(
+                            selected = isSelected,
+                            onClick = { selectedStoreFilter = store },
+                            label = { Text(store, fontSize = 12.sp) }
+                        )
+                    }
+                }
+            }
+        }
+
+        // List section
+        if (groupedProducts.isEmpty()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f)
+                    .padding(24.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Info,
+                        contentDescription = null,
+                        modifier = Modifier.size(64.dp),
+                        tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
+                    )
+                    Text(
+                        text = "Karşılaştıracak yeterli ürün veri geçmişi bulunamadı.",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center
+                    )
+                    Text(
+                        text = if (onlyChangesFilter) "Lütfen 'Sadece Fiyatı Değişenler' filtresini kapatarak tekil fişlerdeki ürünleri de görmeyi deneyin." else "Taranmış veya kaydedilmiş uygun fişiniz bulunmamaktadır.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                        textAlign = TextAlign.Center
+                    )
+                }
+            }
+        } else {
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f)
+                    .padding(horizontal = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp),
+                contentPadding = PaddingValues(bottom = 80.dp)
+            ) {
+                itemsIndexed(groupedProducts) { _, prodHist ->
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(16.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            // Product Title Header
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.Top
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = prodHist.productName,
+                                        fontWeight = FontWeight.Bold,
+                                        style = MaterialTheme.typography.titleMedium,
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                        maxLines = 2,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    ContactStoreBadge(storeName = prodHist.storeName)
+                                }
+
+                                Spacer(modifier = Modifier.width(8.dp))
+
+                                // Visual Spark Indicator
+                                PriceSparkIndicator(history = prodHist.history)
+                            }
+
+                            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
+
+                            // Step Timeline sequence of occurrences
+                            Column(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                prodHist.history.forEachIndexed { index, histPoint ->
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        // Chronological visual dot tracker
+                                        Column(
+                                            horizontalAlignment = Alignment.CenterHorizontally,
+                                            modifier = Modifier.padding(end = 12.dp)
+                                        ) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(8.dp)
+                                                    .clip(CircleShape)
+                                                    .background(
+                                                        when {
+                                                            histPoint.isFirst -> MaterialTheme.colorScheme.outline
+                                                            histPoint.diffAmount > 0.0 -> MaterialTheme.colorScheme.error
+                                                            histPoint.diffAmount < 0.0 -> MaterialTheme.colorScheme.tertiary
+                                                            else -> MaterialTheme.colorScheme.outline
+                                                        }
+                                                    )
+                                            )
+                                            if (index < prodHist.history.size - 1) {
+                                                Box(
+                                                    modifier = Modifier
+                                                        .width(2.dp)
+                                                        .height(28.dp)
+                                                        .background(MaterialTheme.colorScheme.outlineVariant)
+                                                )
+                                            }
+                                        }
+
+                                        // Purchase info row content
+                                        Row(
+                                            modifier = Modifier.weight(1f),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Column {
+                                                Text(
+                                                    text = formatDate(histPoint.occurrence.date),
+                                                    fontWeight = FontWeight.SemiBold,
+                                                    fontSize = 13.sp,
+                                                    color = MaterialTheme.colorScheme.onSurface
+                                                )
+                                                Text(
+                                                    text = "${formatDouble(histPoint.occurrence.quantity)} adet alındı",
+                                                    fontSize = 11.sp,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                )
+                                            }
+
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                            ) {
+                                                Text(
+                                                    text = "₺${formatMoney(histPoint.occurrence.unitPrice)}",
+                                                    fontWeight = FontWeight.Bold,
+                                                    fontSize = 14.sp,
+                                                    color = MaterialTheme.colorScheme.onSurface
+                                                )
+
+                                                // Change Badge pill
+                                                PriceChangeBadge(histPoint = histPoint)
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun ContactStoreBadge(storeName: String) {
+    Card(
+        shape = RoundedCornerShape(6.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Default.ShoppingCart,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(10.dp)
+            )
+            Text(
+                text = storeName,
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary
+            )
+        }
+    }
+}
+
+@Composable
+fun PriceSparkIndicator(history: List<PriceHistoryPoint>) {
+    if (history.size < 2) return
+    val lastPoint = history.last()
+    val isUp = lastPoint.diffAmount > 0.0
+    val isDown = lastPoint.diffAmount < 0.0
+
+    val symbol = when {
+        isUp -> "▲"
+        isDown -> "▼"
+        else -> "▬"
+    }
+    val tint = when {
+        isUp -> MaterialTheme.colorScheme.error
+        isDown -> MaterialTheme.colorScheme.tertiary
+        else -> MaterialTheme.colorScheme.outline
+    }
+
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        modifier = Modifier
+            .clip(RoundedCornerShape(20.dp))
+            .background(
+                when {
+                    isUp -> MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.2f)
+                    isDown -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.2f)
+                    else -> MaterialTheme.colorScheme.surfaceVariant
+                }
+            )
+            .padding(horizontal = 8.dp, vertical = 4.dp)
+    ) {
+        Text(
+            text = symbol,
+            color = tint,
+            fontWeight = FontWeight.Bold,
+            fontSize = 12.sp
+        )
+        Text(
+            text = when {
+                isUp -> "Yükselme Eğilimi"
+                isDown -> "Düşüş Eğilimi"
+                else -> "Dengeli"
+            },
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Bold,
+            color = when {
+                isUp -> MaterialTheme.colorScheme.error
+                isDown -> MaterialTheme.colorScheme.tertiary
+                else -> MaterialTheme.colorScheme.onSurfaceVariant
+            }
+        )
+    }
+}
+
+@Composable
+fun PriceChangeBadge(histPoint: PriceHistoryPoint) {
+    if (histPoint.isFirst) {
+        Card(
+            shape = RoundedCornerShape(8.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+        ) {
+            Text(
+                text = "İLK FİYAT",
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
+            )
+        }
+    } else {
+        val isUp = histPoint.diffAmount > 0.0
+        val isDown = histPoint.diffAmount < 0.0
+        
+        val containerColor = when {
+            isUp -> MaterialTheme.colorScheme.errorContainer
+            isDown -> MaterialTheme.colorScheme.tertiaryContainer // Note: let's use safety default if tertiaryContainer not resolved
+            else -> MaterialTheme.colorScheme.surfaceVariant
+        }
+        val contentColor = when {
+            isUp -> MaterialTheme.colorScheme.onErrorContainer
+            isDown -> MaterialTheme.colorScheme.onTertiaryContainer
+            else -> MaterialTheme.colorScheme.onSurfaceVariant
+        }
+
+        Card(
+            shape = RoundedCornerShape(8.dp),
+            colors = CardDefaults.cardColors(containerColor = containerColor),
+            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+        ) {
+            Row(
+                modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                val symbol = when {
+                    isUp -> "▲"
+                    isDown -> "▼"
+                    else -> "▬"
+                }
+                Text(
+                    text = symbol,
+                    color = contentColor,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 10.sp
+                )
+                Text(
+                    text = if (isUp) {
+                        "+₺${formatMoney(histPoint.diffAmount)} (+${histPoint.diffPercentage.toInt()}%)"
+                    } else if (isDown) {
+                        "₺${formatMoney(histPoint.diffAmount)} (${histPoint.diffPercentage.toInt()}%)"
+                    } else {
+                        "DEĞİŞMEDİ"
+                    },
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = contentColor
+                )
+            }
+        }
+    }
+}
