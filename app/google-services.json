@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "799090409377",
+    "project_id": "fis-kayit-analiz",
+    "storage_bucket": "fis-kayit-analiz.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:799090409377:android:8e14ee587102bd25c155e0",
+        "android_client_info": {
+          "package_name": "com.aistudio.fisdefteri.vswkpq"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDRvp7CpxyjinuEMQzOmlSXWDGrXuFOOp8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

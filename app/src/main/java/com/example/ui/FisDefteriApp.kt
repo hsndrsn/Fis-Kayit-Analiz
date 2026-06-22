@@ -718,10 +718,15 @@ fun HistoryScreen(
     }
 
     val filteredReceipts = remember(receipts, searchQuery, selectedCategoryFilter, selectedStoreFilter) {
+        val normalizedSearch = normalizeProductName(searchQuery)
         receipts.filter { rec ->
-            val matchesSearch = rec.storeName.contains(searchQuery, ignoreCase = true) || 
-                                (rec.location ?: "").contains(searchQuery, ignoreCase = true) ||
-                                rec.items.any { it.name.contains(searchQuery, ignoreCase = true) }
+            val matchesSearch = if (normalizedSearch.isEmpty()) {
+                true
+            } else {
+                normalizeProductName(rec.storeName).contains(normalizedSearch) || 
+                normalizeProductName(rec.location ?: "").contains(normalizedSearch) ||
+                rec.items.any { normalizeProductName(it.name).contains(normalizedSearch) }
+            }
 
             val matchesStore = selectedStoreFilter == "Tümü" || rec.storeName.trim() == selectedStoreFilter
 
@@ -1206,7 +1211,7 @@ fun PreviewOcrScreen(
 fun EditReceiptScreen(
     receipt: Receipt,
     onCancel: () -> Unit,
-    onSave: (Long, String, String, Double, String, List<ReceiptItem>) -> Unit
+    onSave: (String, String, String, Double, String, List<ReceiptItem>) -> Unit
 ) {
     var storeName by remember { mutableStateOf(receipt.storeName) }
     var rawDate by remember { mutableStateOf(formatDate(receipt.date)) }
@@ -2546,6 +2551,17 @@ fun formatDouble(value: Double): String {
     }
 }
 
+fun normalizeProductName(original: String): String {
+    val map = mapOf(
+        'ç' to 'c', 'ğ' to 'g', 'ı' to 'i', 'ö' to 'o', 'ş' to 's', 'ü' to 'u',
+        'Ç' to 'c', 'Ğ' to 'g', 'İ' to 'i', 'Ö' to 'o', 'Ş' to 's', 'Ü' to 'u'
+    )
+    val lower = original.trim().lowercase(Locale("tr", "TR"))
+    val withoutTurkic = lower.map { map[it] ?: it }.joinToString("")
+    // also remove all redundant spaces and punctuation like '-', '/' to get a solid matching key
+    return withoutTurkic.replace("[^a-z0-9]".toRegex(), "")
+}
+
 fun consolidateStoreName(name: String): String {
     val trimmed = name.trim()
     val lower = trimmed.lowercase(Locale("tr", "TR"))
@@ -2625,9 +2641,7 @@ fun PriceTrackingScreen(receipts: List<Receipt>) {
             val consolidatedStore = consolidateStoreName(rec.storeName)
             val dateStr = formatDate(rec.date)
             rec.items.forEach { item ->
-                val normalizedName = item.name.trim()
-                    .replace("\\s+".toRegex(), " ")
-                    .lowercase(Locale("tr", "TR"))
+                val normalizedName = normalizeProductName(item.name)
                 val dayKey = "${consolidatedStore}|||${normalizedName}|||${dateStr}"
                 if (dayKey !in seenOnSameDay) {
                     seenOnSameDay.add(dayKey)
@@ -2661,7 +2675,7 @@ fun PriceTrackingScreen(receipts: List<Receipt>) {
             matchesStore && matchesSearch
         }
 
-        val groups = filtered.groupBy { "${it.storeName}|||${it.productName.lowercase(Locale("tr", "TR"))}" }
+        val groups = filtered.groupBy { "${it.storeName}|||${normalizeProductName(it.productName)}" }
         
         val productHistoryList = groups.map { (key, occurrences) ->
             val parts = key.split("|||")

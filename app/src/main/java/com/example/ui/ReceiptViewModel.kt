@@ -13,6 +13,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.tasks.await
 import java.io.ByteArrayOutputStream
 import java.text.SimpleDateFormat
 import java.util.*
@@ -26,8 +27,7 @@ sealed interface GeminiOcrState {
 
 class ReceiptViewModel(application: Application) : AndroidViewModel(application) {
 
-    private val db = AppDatabase.getDatabase(application)
-    private val repository = ReceiptRepository(db.receiptDao())
+    private val repository = ReceiptRepository()
 
     // UI visible receipts
     val allReceipts: StateFlow<List<Receipt>> = repository.allReceipts
@@ -52,7 +52,7 @@ class ReceiptViewModel(application: Application) : AndroidViewModel(application)
         _ocrState.value = GeminiOcrState.Idle
     }
 
-    fun deleteReceipt(id: Long) {
+    fun deleteReceipt(id: String) {
         viewModelScope.launch {
             repository.deleteById(id)
         }
@@ -67,19 +67,23 @@ class ReceiptViewModel(application: Application) : AndroidViewModel(application)
     ) {
         viewModelScope.launch {
             val timestamp = parseTurkishDate(dateStr)
+            
             val receipt = Receipt(
                 storeName = storeName.ifBlank { "Bilinmeyen Mağaza" },
                 date = timestamp,
                 totalAmount = totalAmount,
                 location = location,
-                items = items
+                items = items,
+                imageUrl = null
             )
             repository.insert(receipt)
+            // clear photo after saving
+            _capturedPhoto.value = null
         }
     }
 
     fun updateReceipt(
-        id: Long,
+        id: String,
         storeName: String,
         dateStr: String,
         totalAmount: Double,
@@ -179,7 +183,24 @@ class ReceiptViewModel(application: Application) : AndroidViewModel(application)
 
             } catch (e: Exception) {
                 Log.e("ReceiptOCR", "Ocr Error", e)
-                _ocrState.value = GeminiOcrState.Error("Fiş analizi başarısız oldu: ${e.localizedMessage}")
+                val errorMessage = when {
+                    e is retrofit2.HttpException && e.code() == 429 -> {
+                        "Gemini API kullanım limitine (HTTP 429) ulaşıldı. Lütfen bir süre sonra tekrar deneyin veya AI Studio üzerinden kota ayarlarınızı kontrol edin."
+                    }
+                    e.localizedMessage?.contains("429") == true -> {
+                        "Gemini API limitine ulaşıldı (HTTP 429). Lütfen kısa bir süre sonra tekrar deneyin veya API kotanızı kontrol edin."
+                    }
+                    e is java.net.UnknownHostException -> {
+                        "İnternet bağlantısı kurulamadı. Lütfen ağınızı kontrol edip tekrar deneyin."
+                    }
+                    e is java.net.SocketTimeoutException -> {
+                        "Sunucu bağlantı zaman aşımına uğradı. Lütfen tekrar deneyin."
+                    }
+                    else -> {
+                        "Fiş analizi başarısız oldu: ${e.localizedMessage}"
+                    }
+                }
+                _ocrState.value = GeminiOcrState.Error(errorMessage)
             }
         }
     }
