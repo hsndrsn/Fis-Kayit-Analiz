@@ -72,7 +72,8 @@ val CATEGORY_COLORS = mapOf(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FisDefteriApp(
-    viewModel: ReceiptViewModel = viewModel()
+    viewModel: ReceiptViewModel = viewModel(),
+    authViewModel: AuthViewModel? = null
 ) {
     val context = LocalContext.current
     val receipts by viewModel.allReceipts.collectAsState()
@@ -238,7 +239,8 @@ fun FisDefteriApp(
                                 onGalleryClick = { galleryLauncher.launch("image/*") },
                                 onReceiptClick = { selectedReceiptForDetail = it },
                                 ocrState = ocrState,
-                                onDismissError = { viewModel.resetOcrState() }
+                                onDismissError = { viewModel.resetOcrState() },
+                                onSignOut = { authViewModel?.signOut(context) }
                             )
                             1 -> HistoryScreen(
                                 receipts = receipts,
@@ -336,7 +338,8 @@ fun HomeScreen(
     onGalleryClick: () -> Unit,
     onReceiptClick: (Receipt) -> Unit,
     ocrState: GeminiOcrState,
-    onDismissError: () -> Unit
+    onDismissError: () -> Unit,
+    onSignOut: () -> Unit
 ) {
     val thisMonthSpending = remember(receipts) {
         val cal = Calendar.getInstance()
@@ -358,18 +361,27 @@ fun HomeScreen(
     ) {
         // App header
         item {
-            Column(modifier = Modifier.padding(vertical = 8.dp)) {
-                Text(
-                    text = "Fiş Kayıt & Analiz",
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 28.sp,
-                    color = MaterialTheme.colorScheme.primary
-                )
-                Text(
-                    text = "Hızlı tarama, akıllı harcama takibi",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column {
+                    Text(
+                        text = "Fiş Kayıt & Analiz",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 28.sp,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    Text(
+                        text = "Hızlı tarama, akıllı harcama takibi",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                IconButton(onClick = onSignOut) {
+                    Icon(Icons.Default.ExitToApp, contentDescription = "Çıkış Yap")
+                }
             }
         }
 
