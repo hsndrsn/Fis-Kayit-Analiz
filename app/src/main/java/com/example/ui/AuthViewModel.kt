@@ -68,10 +68,17 @@ class AuthViewModel : ViewModel() {
                 )
 
                 val credential = result.credential
-                if (credential is GoogleIdTokenCredential) {
-                    val firebaseCredential = GoogleAuthProvider.getCredential(credential.idToken, null)
-                    auth.signInWithCredential(firebaseCredential).await()
-                    _isUserLoggedIn.value = true
+                if (credential is androidx.credentials.CustomCredential &&
+                    credential.type == GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL) {
+                    try {
+                        val googleIdTokenCredential = GoogleIdTokenCredential.createFrom(credential.data)
+                        val firebaseCredential = GoogleAuthProvider.getCredential(googleIdTokenCredential.idToken, null)
+                        auth.signInWithCredential(firebaseCredential).await()
+                        _isUserLoggedIn.value = true
+                    } catch (e: Exception) {
+                        Log.e("Auth", "Failed to parse Google ID token", e)
+                        _errorMessage.value = "Kimlik verisi işlenemedi: ${e.message}"
+                    }
                 } else {
                     _errorMessage.value = "Google girişi başarısız, beklenmeyen kimlik verisi."
                 }
